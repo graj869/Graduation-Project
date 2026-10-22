@@ -1,105 +1,140 @@
-# 🌱 Groww SIP Retention Copilot (AI Growth MVP)
+# 🌱 Groww 12-Month SIP Retention Companion (AI Growth MVP)
 
-> **PM Graduation Project**: Increasing 12-Month Mutual Fund SIP Retention for First-Time Investors on Groww.
-
----
-
-## 📌 1. Problem Statement
-
-On investment platforms like Groww, first-time mutual fund investors experience the highest churn rate between **Month 3 and Month 6**:
-1. **Early Return Anxiety**: In the initial months, the invested corpus is small, and normal market volatility can show negative or negligible returns. First-time investors panic and stop their SIPs because they mistake market noise for fund failure.
-2. **Cashflow & Salary Mismatches**: Unforeseen month-end expenses or delayed salaries lead to SIP bank mandate debit failures. After one or two failures, users disengage or cancel their mandate.
-3. **Information Overload & Misplaced Advice**: Users seek quick tips or "best funds", falling prey to social media FOMO or seeking direct stock/fund recommendations that execution-only platforms cannot legally or responsibly provide.
-
-### The Objective
-Build an **AI-native Growth MVP** that acts as an empathetic behavioral coach to:
-- Normalize early SIP volatility and explain **Rupee Cost Averaging (RCA)**.
-- Intervene proactively during cashflow distress by presenting Groww's friction-reducing tools (**SIP Pause**, **Skip Instalment**, **Edit Debit Date**).
-- Maintain 100% regulatory neutrality by rejecting direct fund recommendations.
+> **Principal PM Graduation Project**: Increasing 12-Month Mutual Fund SIP Retention for First-Time Retail Investors on Groww through Behavioral Coaching and Friction-Free Self-Serve Interventions.
 
 ---
 
-## ⚖️ 2. Core Constraints
+## 📌 1. Executive Summary & Problem Statement
 
-| Constraint | Specification |
-| :--- | :--- |
-| **1. No Fund Recommendations** | Strictly zero recommendations of specific mutual fund schemes, AMCs, stocks, or ETFs. Educates only on asset classes and risk profiles. |
-| **2. Zero FOMO or Urgency** | Strictly forbidden from using artificial urgency ("limited time", "hurry", "rally ending", "crash incoming"). Tone must remain calm, objective, and habit-centric. |
-| **3. Eval-Gated Guardrails** | Every AI output is run through a dual-tier verification gate (Regex Heuristics + LLM Evaluator). Any violation triggers an immediate deterministic **Safe Fallback**. |
+First-time mutual fund investors in India (typically aged 22–28, salaried, Tier 1–3 cities) experience a dramatic drop-off in their SIP journey between **Month 3 and Month 6**. 
+
+### The Industry Phenomenon:
+1. **Early Return Disappointment (Months 3–6)**: First-time investors enter equity markets with expectations anchored in Fixed Deposits (guaranteed linear returns) or social media bull-run hype. When short-term market fluctuations show flat or negative (-2% to -5%) returns in Month 4, loss aversion triggers panic redemptions.
+2. **Salary & Cashflow Mismatch**: 60%+ of SIP debit dates are inadvertently scheduled on the 1st to 5th of the month. When salaries are delayed (e.g. 7th to 10th), the auto-debit bounces, incurring hefty bank NACH bounce penalties (₹450–₹590 per failure). After 1–2 bounces, users cancel the mandate in frustration.
+3. **Misconception of Lock-in & Penalties**: Many first-time investors mistakenly conflate mutual funds with Insurance (LIC) or Recurring Deposits (RDs), fearing CIBIL score damage, legal notices, or heavy AMC penalties if they miss an instalment.
+4. **Execution-Only Platform Boundaries**: As an execution platform regulated by SEBI, Groww cannot legally offer personalized stock or fund recommendations. The AI must remain strictly educational and habit-reinforcing.
 
 ---
 
-## 🏗️ 3. Architecture & Safety Pipeline
+## 📐 2. Metric Decomposition & Retention Math
 
-```mermaid
-flowchart TD
-    User([User Prompt / Scenario]) --> Streamlit[Streamlit UI / Groww Theme]
-    Streamlit --> SystemPrompt[System Prompt with SEBI & Retention Constraints]
-    SystemPrompt --> Gemini[Gemini 2.5 Flash Primary Model]
-    Gemini --> Candidate[Candidate Response]
-    
-    subgraph Guardrail Verification Engine
-        Candidate --> Tier1{Tier 1: Heuristic Regex Scan}
-        Tier1 -- Flagged --> Fallback[Safe Fallback Response]
-        Tier1 -- Pass --> Tier2{Tier 2: LLM Safety Evaluator}
-        Tier2 -- Violation Detected --> Fallback
-        Tier2 -- All Rules Clear --> Verified[Verified Compliant Response]
-    end
-    
-    Verified --> Display[Render in Chat with Guardrail Audit Badge]
-    Fallback --> Display
+### Primary North Star Metric:
+$$\text{12-Month Active SIP Retention Rate} = \frac{\text{Investors from Cohort } C \text{ with } \ge 1 \text{ successful SIP debit in Month 12}}{\text{Total Investors in Cohort } C \text{ who initiated their first SIP in Month 1}} \times 100$$
+
+### Retention Cohort Drop-off Anatomy:
+```
+Month 1: [====================] 100%  (Onboarding & First Debit)
+Month 2: [==================  ]  88%  (Familiarity Phase)
+Month 3: [==============      ]  68%  <-- Drop-off accelerates (First market dip)
+Month 4: [===========         ]  52%  <-- Critical Churn Zone (Flat/Red portfolio anxiety)
+Month 6: [=========           ]  44%  <-- Salary mismatch & bank bounce fatigue
+Month 12:[=======             ]  36%  <-- Baseline 12-Month Retention
+```
+* **Baseline 12-Month Retention**: ~36%
+* **MVP Target 12-Month Retention**: **48% (+1200 bps improvement)**
+* **Mechanism**: 
+  - Alleviate early return anxiety via Rupee Cost Averaging visual coaching.
+  - Eliminate bank bounce churn by migrating users to post-salary dates (e.g., 8th/10th).
+  - Convert cancellations into temporary **Groww SIP Pause** (1–3 months) or **Skip Instalment**.
+
+---
+
+## 🏗️ 3. System Architecture & Safety Pipeline
+
+```
++-----------------------------------------------------------------------------------+
+|                              USER INTERFACE LAYER                                 |
+|   Streamlit App (Groww Emerald Theme #00D09C) | Mobile-Responsive Container       |
+|   - 💬 AI Retention Companion      - ⚙️ Cashflow Manager    - 📊 Evidence Hub    |
++-----------------------------------------+-----------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+|                        INTENT CLASSIFIER & PROMPT ENGINE                          |
+|   - Inputs: User Query / Scenario Pills (Month 4 Loss, Salary Delay, Advisory Trap)|
+|   - Precedence: 1. Advisory Guard -> 2. Return Anxiety -> 3. Lock-in -> 4. Cashflow|
++-----------------------------------------+-----------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+|                        FOUNDATION MODEL INFERENCE LAYER                           |
+|   Google Gemini (gemini-2.5-flash via google-genai SDK, temperature=0.2)          |
+|   System Instruction: Zero-tolerance on fund recommendations, Zero-FOMO/Urgency   |
++-----------------------------------------+-----------------------------------------+
+                                          |
+                                          v
++-----------------------------------------------------------------------------------+
+|                     TWO-TIER EVAL-GATED GUARDRAIL ENGINE                          |
+|                                                                                   |
+|  [Tier 1: Heuristic Regex Filter]                                                 |
+|     - Detects banned tickers, buy/sell imperatives, urgency/FOMO language         |
+|         |                                                                         |
+|         +---> (If Flagged) ------------+                                          |
+|         |                              |                                          |
+|  [Tier 2: LLM Safety Evaluator]        |                                          |
+|     - Verifies: 0 Fund Names,          |                                          |
+|                 0 FOMO,                v                                          |
+|                 SEBI Non-Advisory   +------------------------------------------+  |
+|         |                           |      DETERMINISTIC SAFE FALLBACK         |  |
+|         +---> (If Flagged) -------->|  - Politely decline recommendation       |  |
+|         |                           |  - Surface Groww Pause/Skip self-serve   |  |
+|         v (If Approved)             |  - Reassure on Rupee Cost Averaging      |  |
+|  [Render Verified Response]         +------------------------------------------+  |
++-----------------------------------------------------------------------------------+
 ```
 
-### Components:
-- **`app.py`**: Streamlit application with custom Groww-themed CSS, quick-scenario action pills, and chat history.
-- **Dual-Mode Authentication**: Automatically detects `GEMINI_API_KEY` from `.env`, or permits manual entry via the sidebar.
-- **Dual-Tier Guardrail Verifier**:
-  1. *Tier 1 (Heuristic)*: Catches direct recommendation phrases, guaranteed return claims, and urgency keywords.
-  2. *Tier 2 (AI Safety Evaluator)*: Uses a temperature-0 verification prompt to evaluate regulatory non-advisory compliance and behavioral boundaries.
-  3. *Deterministic Fallback*: Safe educational response highlighting Rupee Cost Averaging and Groww self-serve controls (Pause/Skip/Date change).
+---
+
+## ⚖️ 4. Regulatory & Behavioral Constraints
+
+1. **SEBI Non-Advisory Mandate**: Groww is an execution-only platform. The companion **never** recommends, rates, or compares specific mutual fund schemes (e.g., *Parag Parikh Flexi Cap*, *Quant Small Cap*, *HDFC Top 100*).
+2. **Zero Fear/FOMO/Urgency**: Phrases like *"Last chance to buy"*, *"Market will crash"*, or *"Hurry before rally ends"* are completely prohibited. Tone is calm, long-term, and rational.
+3. **Compounding Preservation**: When users face liquidity shortages, the system actively discourages SIP mandate cancellation and guides them to **SIP Pause** (1–3 months) or **Skip Instalment** with zero fees.
 
 ---
 
-## 🚀 4. Setup Instructions
+## 🚀 5. Local Setup & Execution Guide
 
 ### Prerequisites
-- Python 3.10+ installed
-- A Google Gemini API Key ([Get one free from Google AI Studio](https://aistudio.google.com/))
+- Python 3.10+ (Tested on Python 3.13)
+- Google Gemini API Key ([Get free API key](https://aistudio.google.com/))
 
-### Step 1: Clone & Navigate to Repository
+### Step 1: Clone and Navigate
 ```bash
-git clone <your-github-repo-url>
+git clone https://github.com/<YOUR_GITHUB_USERNAME>/Graduation-Project.git
 cd Graduation_project
 ```
 
-### Step 2: Create and Activate Virtual Environment
+### Step 2: Set Up Virtual Environment & Dependencies
 ```bash
-# On macOS / Linux:
+# Create and activate .venv
 python3 -m venv .venv
 source .venv/bin/activate
 
-# On Windows:
-# python -m venv .venv
-# .venv\Scripts\activate
-```
-
-### Step 3: Install Dependencies
-```bash
+# Install verified pinned dependencies
 pip install -r requirements.txt
 ```
 
-### Step 4: Configure Environment Variables
-Copy the `.env.example` file to create your `.env`:
+### Step 3: Configure Environment Variables
 ```bash
 cp .env.example .env
 ```
-Open `.env` and insert your API key:
+Open `.env` and set your key:
 ```ini
 GEMINI_API_KEY=AIzaSyYourActualKeyHere
 ```
-*(Alternatively, you can skip `.env` and paste the key directly into the Streamlit sidebar at runtime).*
+*(Note: If you do not have a `.env` file, you can enter the key securely in the app sidebar at runtime).*
 
-### Step 5: Run the Streamlit Application
+### Step 4: Run Discovery Engine Evaluation
+```bash
+# Generate 50 synthetic feedback samples (JSON & CSV)
+python discovery_engine/synthetic_feedback_data.py
+
+# Run the 20-item Golden Set benchmark evaluation
+python discovery_engine/classifier_eval.py
+```
+
+### Step 5: Launch the Streamlit MVP
 ```bash
 streamlit run app.py
 ```
@@ -107,23 +142,39 @@ Open your browser at `http://localhost:8501`.
 
 ---
 
-## 🔗 5. Linking to GitHub Remote Repository
+## ☁️ 6. Streamlit Community Cloud Deployment
 
-Run these exact bash commands from the project root to connect and push this repository to GitHub:
+To host this MVP live for PM evaluation:
+1. Push your repository to GitHub:
+   ```bash
+   git add .
+   git commit -m "feat: complete Groww SIP retention AI MVP"
+   git push -u origin main
+   ```
+2. Navigate to [share.streamlit.io](https://share.streamlit.io/).
+3. Select your repository: `<YOUR_GITHUB_USERNAME>/Graduation-Project`.
+4. Main file path: `app.py`.
+5. Under **Advanced Settings > Secrets**, add your Gemini API Key:
+   ```toml
+   GEMINI_API_KEY = "AIzaSy..."
+   ```
+6. Click **Deploy**!
 
-```bash
-# 1. Stage all project files
-git add .
+---
 
-# 2. Create the initial commit
-git commit -m "feat: initialize Groww SIP retention AI growth MVP with eval guardrails"
+## 📁 7. Project Structure
 
-# 3. Rename branch to main
-git branch -M main
-
-# 4. Add your GitHub remote repository (replace with your repo URL)
-git remote add origin https://github.com/<YOUR_GITHUB_USERNAME>/Graduation-Project.git
-
-# 5. Push code to GitHub
-git push -u origin main
+```
+Graduation_project/
+├── .env.example                      # Template for Gemini API Key
+├── .gitignore                        # Git exclusion rules
+├── README.md                         # Architecture, metric math, setup guide
+├── EVIDENCE_LOG.md                   # 20-item Golden Set validation & correction cases
+├── requirements.txt                  # Pinned dependencies
+├── app.py                            # Streamlit MVP with Groww UI & Cashflow Simulator
+└── discovery_engine/
+    ├── synthetic_feedback_data.py    # 50-item Indian investor feedback generator
+    ├── synthetic_feedback.json       # Generated dataset in JSON
+    ├── synthetic_feedback.csv        # Generated dataset in CSV
+    └── classifier_eval.py            # Golden Set benchmark & correction pipeline
 ```

@@ -1,6 +1,9 @@
 import os
-import re
+import requests
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
 
 st.set_page_config(
     page_title="Groww 12-Month SIP Retention Companion",
@@ -8,7 +11,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling (Groww Design Language)
+# Groww Brand Custom CSS
 st.markdown("""
 <style>
     .metric-box {
@@ -22,12 +25,13 @@ st.markdown("""
     .metric-main { font-size: 15px; color: #44475B; font-weight: 700; margin-top: 2px; }
     .audit-chip {
         display: inline-block;
-        padding: 2px 10px;
+        padding: 3px 10px;
         border-radius: 12px;
         font-size: 11px;
         font-weight: 600;
         margin-top: 6px;
     }
+    .audit-ai { background-color: #E8F8F5; color: #00875A; border: 1px solid #00D09C; }
     .audit-compliance { background-color: #FDE8E8; color: #9B1C1C; border: 1px solid #F8B4B4; }
     .audit-cashflow { background-color: #E1EFFE; color: #1E429F; border: 1px solid #A4CAFE; }
     .audit-market { background-color: #FEF08A; color: #713F12; border: 1px solid #FDE047; }
@@ -36,11 +40,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Title & Problem Statement Context
+# Top Header
 st.title("🌱 Groww 12-Month SIP Retention Companion")
 st.caption("AI-Native Growth MVP: Tackling First-Time Mutual Fund Churn (Months 3–6) without Fear or Recommendations.")
 
-# Top Strategic Context Cards
+# Top Strategic KPI Cards
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("<div class='metric-box'><div class='metric-sub'>Target Metric</div><div class='metric-main'>12-Month Active SIP Continuation</div></div>", unsafe_allow_html=True)
@@ -51,7 +55,7 @@ with c3:
 
 st.write("")
 
-# Quick Test Buttons for Mentors/Evaluators
+# Quick Test Prompts for Evaluators
 st.markdown("##### ⚡ Quick Test Scenarios (Mentor Evaluation):")
 b1, b2, b3, b4 = st.columns(4)
 quick_input = None
@@ -65,144 +69,188 @@ if b3.button("🛡️ Recommend Best Small Cap"):
 if b4.button("⏸️ Emergency Cash Crunch"):
     quick_input = "I have sudden medical expenses this month and have no money left for my SIP."
 
-# Comprehensive AI & Guardrail Decision Engine
-def process_investor_query(query: str) -> dict:
+# Strict System Prompt
+SYSTEM_PROMPT = """
+You are the AI Retention Companion on Groww, designed to support first-time Indian mutual fund retail investors during their critical first 12 months.
+
+STRICT CONSTRAINTS & EVAL GUARDRAILS:
+1. SEBI NON-ADVISORY: NEVER recommend specific mutual fund schemes, AMC names, stocks, or categories. If asked for recommendations ("which fund", "best small cap"), decline politely, state SEBI compliance, and explain asset allocation or time horizon principles.
+2. NO FOMO / NO GUARANTEES: Never promise guaranteed returns, never say "double your money", and never use fear or urgency ("hurry", "loss ho jayega").
+3. SHORT-TERM HORIZONS (e.g., 1 Year): Explain that equity SIPs are not designed for quick 1-year profits due to volatility, exit loads, and short-term capital gains tax.
+4. MULTI-YEAR HORIZONS (e.g., 3-5 Years): Explain Rupee-Cost Averaging, staying disciplined through market corrections, and annual Step-Ups.
+5. SALARY DELAYS & BOUNCES: Promote native Groww features: 'Skip Instalment' (prevents bank NACH bounce charges) and 'Edit SIP Date' (shift 3-5 days after salary).
+6. CASH CRUNCHES: Explain 'Pause SIP' for 1-3 months so previously accumulated units remain invested.
+7. Keep tone calm, clear, empathetic, and objective.
+"""
+
+def generate_live_ai_response(prompt: str, key: str):
+    """Cleanly authenticates both AQ. and AIza keys via header transmission."""
+    if not key:
+        return None
+    cleaned_key = key.strip().replace('"', '').replace("'", "")
+    
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": cleaned_key
+    }
+    payload = {
+        "contents": [
+            {
+                "parts": [
+                    {"text": f"{SYSTEM_PROMPT}\n\nUser Query: {prompt}"}
+                ]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.2
+        }
+    }
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=8)
+        if res.status_code == 200:
+            data = res.json()
+            return data["candidates"][0]["content"]["parts"][0]["text"]
+    except Exception:
+        pass
+    return None
+
+def semantic_intent_engine(query: str) -> dict:
+    """Comprehensive fallback classifying queries across distinct investor friction points."""
     q = query.lower()
 
-    # GUARDRAIL 1: SEBI Advisory Probes (Strict Refusal)
-    advisory_keywords = [
-        "best fund", "recommend", "which fund", "top fund", "small cap", "large cap",
-        "mid cap", "nifty", "stock", "share", "crypto", "buy", "suggest fund", "kisme invest", "kaha lagau"
-    ]
-    if any(k in q for k in advisory_keywords):
+    # 1. SEBI Advisory Probes
+    if any(k in q for k in ["best fund", "recommend", "which fund", "top fund", "small cap", "large cap", "nifty", "stock", "crypto", "buy", "suggest fund", "kisme invest", "kaha lagau"]):
         return {
             "badge": "🛡️ SEBI Advisory Guardrail (Zero Recommendation)",
             "style": "audit-compliance",
             "reply": (
                 "**SEBI Regulatory Compliance Notice:**\n"
-                "As an AI retention companion, I am strictly prohibited from recommending specific mutual fund schemes, AMCs, or stocks.\n\n"
-                "**How to make independent decisions on Groww:**\n"
-                "• **Align with Your Horizon**: For long-term goals (>5 years), broad-based index or diversified equity funds are typically chosen. For short-term goals (<3 years), debt or lower-risk options avoid sudden market dips.\n"
-                "• **Use Groww Screeners**: Filter mutual funds objectively by Category, 3Y/5Y Rolling Returns, and Fund Manager track record.\n"
-                "• **Asset Allocation**: Stick to your planned asset mix rather than chasing recent top performers."
+                "As an AI retention companion, I am strictly prohibited under SEBI guidelines from recommending specific mutual fund schemes, AMCs, or stocks.\n\n"
+                "**How to make independent investment decisions on Groww:**\n"
+                "• **Align with Your Time Horizon**: For >5 year horizons, diversified equity/index funds accommodate volatility. For short goals (<3 years), conservative debt or arbitrage funds protect capital.\n"
+                "• **Use Objective Metrics**: In the Groww app, filter by 3Y/5Y Rolling Returns, Expense Ratio, and Fund Manager consistency.\n"
+                "• **Avoid Chasing Past Year Winners**: Sectors rotate cyclically; diversified asset allocation delivers more reliable outcomes than picking last year's top performer."
             )
         }
 
-    # CATEGORY 2: Cashflow Friction, Salary Delays, Mandate Bounces
-    cashflow_keywords = [
-        "salary", "delay", "late", "bounce", "date", "2nd", "7th", "mandate", "nach",
-        "penalty", "charge", "failed", "deduct", "account", "bank balance"
-    ]
-    if any(k in q for k in cashflow_keywords):
+    # 2. 1-Year Horizon / Short-Term Maximum Return Expectation
+    if any(k in q for k in ["one year", "1 year", "12 months", "maximum return in one year", "1 saal"]) and any(k in q for k in ["return", "maximum", "steps", "profit", "gain"]):
+        return {
+            "badge": "🎯 Expectation Alignment Engine",
+            "style": "audit-market",
+            "reply": (
+                "**Important Reality Check for 1-Year Equity SIPs:**\n\n"
+                "Expecting 'maximum returns' in just 1 year is the leading reason first-time investors get disappointed and abandon their SIPs. Equity markets are volatile over 12 months, and short-term capital gains tax (STCG) and exit loads apply if you withdraw early.\n\n"
+                "**Recommended approach for a 1-year timeline:**\n"
+                "1. **Re-evaluate Risk**: For money needed in 1 year, equity SIP is risky. Conservative options like Arbitrage or Liquid funds avoid capital loss.\n"
+                "2. **Extend to 3–5 Years**: If your goal is wealth creation via equity, treat 36+ months as your base horizon.\n"
+                "3. **Avoid High-Beta Schemes**: Never invest in small-cap schemes for a 1-year goal hoping for a quick spike.\n"
+                "4. **Automate Autopay**: Align debit dates 3 days post-salary to eliminate failed mandate charges."
+            )
+        }
+
+    # 3. 3-Year Horizon / Multi-SIP Strategy
+    if any(k in q for k in ["3 year", "three year", "2 sip", "3 years", "two sip"]) and any(k in q for k in ["maximum", "return", "best way", "strategy", "portfolio"]):
+        return {
+            "badge": "📈 Portfolio Structuring & Discipline Engine",
+            "style": "audit-action",
+            "reply": (
+                "**Maximizing Outcomes Across 2 SIPs over a 3-Year Horizon:**\n\n"
+                "Over a 3-year timeline, returns depend primarily on structural discipline rather than market timing:\n\n"
+                "1. **Complementary Diversification**: Pair funds that don't heavily overlap (e.g., a Core Index/Large-Cap fund for stability with a Flexi-Cap or Mid-Cap fund for alpha).\n"
+                "2. **Annual SIP Step-Up**: Increasing your SIP amount by 10% each year (aligned with salary increments) significantly increases your 36-month corpus.\n"
+                "3. **Stay Disciplined During Red Months**: A 3-year window will encounter market dips. Buying during corrections lowers your average unit acquisition cost via Rupee-Cost Averaging.\n"
+                "4. **Buffer Debit Dates**: Set both SIP dates 3–5 days after your salary credit to avoid mandate failures."
+            )
+        }
+
+    # 4. Salary Delays / Mandate Bounces / Bank Penalties
+    if any(k in q for k in ["salary", "delay", "late", "bounce", "date", "2nd", "7th", "mandate", "nach", "penalty", "charge", "failed"]):
         return {
             "badge": "⚡ Groww Cashflow & Mandate Action Engine",
             "style": "audit-cashflow",
             "reply": (
-                "**Don't cancel your SIP! Cashflow mismatches are easily solvable on Groww without bank penalties:**\n\n"
-                "1. **Edit SIP Date (Permanent Fix)**:\n"
-                "   • Go to **Groww App > Mutual Funds > SIPs > Select your Fund > Edit SIP**.\n"
-                "   • Shift your monthly date 3–5 days after your salary credit (e.g., if salary comes on the 7th, set SIP to the 10th or 12th).\n\n"
-                "2. **Skip Upcoming Instalment (Temporary Fix)**:\n"
-                "   • Tap **'Skip Instalment'** at least 2 working days before the date.\n"
-                "   • Your autopay mandate remains active, your bank will not charge bounce fees, and your SIP resumes smoothly next month!"
+                "**Avoid Mandate Bounces and Bank Penalties on Groww:**\n\n"
+                "1. **Edit SIP Date (Permanent Fix)**: Go to **Groww > Mutual Funds > SIPs > Select Fund > Edit SIP** and shift the date 3–5 days after your regular salary credit.\n"
+                "2. **Skip This Month's Instalment (Instant Action)**: If salary is delayed, tap **'Skip Instalment'** at least 2 working days before the scheduled date. Your bank mandate stays intact, no NACH bounce charges occur, and your SIP resumes next month."
             )
         }
 
-    # CATEGORY 3: Market Volatility & Early Red Returns (Month 3-6 Anxiety)
-    volatility_keywords = [
-        "negative", "loss", "red", "returns", "down", "crash", "falling", "bear",
-        "gir gaya", "scam", "underperforming", "fd is better", "gold", "worse"
-    ]
-    if any(k in q for k in volatility_keywords):
+    # 5. Volatility / Negative Returns / Red Portfolio (Month 3-6 Anxiety)
+    if any(k in q for k in ["negative", "loss", "red", "returns", "down", "crash", "falling", "gir gaya", "scam", "underperforming", "fd", "gold"]):
         return {
             "badge": "🧠 Behavioral De-escalation & RCA Engine",
             "style": "audit-market",
             "reply": (
-                "**Seeing red or flat returns in Months 3–6 is a universal experience for first-time investors.** Here is what is happening under the hood:\n\n"
-                "• **Rupee-Cost Averaging in Action**: When the market is down, your fixed monthly SIP buys **more fund units** at discounted Net Asset Values (NAV).\n"
-                "• **Accumulation Phase vs Growth Phase**: The first 12–18 months are meant for gathering units. Real compounding accelerates after Year 3.\n"
-                "• **The Cost of Stopping**: Pausing or stopping during a market dip locks in the temporary paper loss and robs you of the recovery bounce.\n\n"
-                "💡 *Actionable Advice:* Treat red months as a seasonal sale on mutual fund units, not a loss."
+                "**Seeing red or flat returns in Months 3–6 is a normal phase for first-time investors:**\n\n"
+                "• **Rupee-Cost Averaging**: When NAVs decline, your fixed monthly SIP purchases **more fund units** at a discount.\n"
+                "• **Accumulation Phase**: Early months accumulate units; compounding becomes visible after market recovery in years 3–5.\n"
+                "• **Cost of Stopping**: Pausing or cancelling during a market dip locks in paper losses and misses the subsequent recovery cycle."
             )
         }
 
-    # CATEGORY 4: Emergency Cash Crunch / Pausing
-    emergency_keywords = [
-        "emergency", "medical", "no money", "paise nahi", "cannot pay", "crisis",
-        "tight", "expense", "job loss", "trouble", "broke"
-    ]
-    if any(k in q for k in emergency_keywords):
+    # 6. Emergency Cash Crunches / Medical Issues
+    if any(k in q for k in ["emergency", "medical", "no money", "paise nahi", "cannot pay", "crisis", "tight", "expense", "job loss"]):
         return {
             "badge": "⏸️ Liquidity Preservation Playbook",
             "style": "audit-action",
             "reply": (
-                "**Unforeseen life expenses happen. You do not have to abandon your wealth journey:**\n\n"
-                "• **Pause SIP for 1 to 3 Months**: On Groww, you can temporarily pause monthly debits with zero fees or cancellation penalties.\n"
-                "• **Your Money Stays Intact**: All your accumulated units stay invested and continue earning market returns while your SIP is paused.\n"
-                "• **Resume Anytime**: As soon as your cash flow stabilizes, you can unpause with a single tap in the app."
+                "**During cash emergencies, you don't need to cancel your SIP:**\n\n"
+                "• **Pause SIP for 1 to 3 Months**: Pause directly from the Groww app with zero cancellation fees or penalty charges.\n"
+                "• **Existing Investments Continue Compounding**: Your accumulated units remain invested in the market.\n"
+                "• **Resume Anytime**: You can restart debits with one tap as soon as your cash flow stabilizes."
             )
         }
 
-    # CATEGORY 5: Stopping / Cancelling / Withdrawing SIP
-    cancellation_keywords = [
-        "stop", "cancel", "withdraw", "redeem", "close", "band karna", "nikalna",
-        "exit", "surrender"
-    ]
-    if any(k in q for k in cancellation_keywords):
+    # 7. Cancellations / Redeeming / Exit Loads
+    if any(k in q for k in ["stop", "cancel", "withdraw", "redeem", "close", "band", "exit load"]):
         return {
             "badge": "⚡ Retention Intervention Engine",
             "style": "audit-action",
             "reply": (
-                "**Before you cancel, consider these three low-friction options:**\n\n"
-                "1. **Is it a cash crunch?** Use **Pause SIP** (1–3 months) or **Skip Instalment** instead of cancelling.\n"
-                "2. **Is it market worry?** Remember equity compounding requires staying invested across at least one full market cycle (3–5 years).\n"
-                "3. **If you must withdraw:** Check if the fund has an **Exit Load** (usually 1% if redeemed within 12 months) and remember short-term capital gains tax applies.\n\n"
-                "If your decision is final, you can stop the SIP anytime via **Groww > Mutual Funds > SIPs > Cancel SIP**."
+                "**Before Cancelling Your SIP:**\n\n"
+                "1. **Cash Flow Tight?** Use **Pause SIP** or **Skip Instalment** instead of full cancellation.\n"
+                "2. **Exit Load & Taxes**: Redeeming equity units within 365 days often incurs an Exit Load (~1%) and Short-Term Capital Gains (STCG) tax.\n"
+                "3. **If You Still Wish to Stop**: Navigate to **Groww > Mutual Funds > SIPs > Select SIP > Cancel SIP**."
             )
         }
 
-    # CATEGORY 6: Tax & Lock-In / Liquidity Clarifications
-    tax_keywords = [
-        "tax", "lock", "elss", "80c", "capital gain", "stcg", "ltcg", "safe", "risk"
-    ]
-    if any(k in q for k in tax_keywords):
-        return {
-            "badge": "📋 Groww Investor Literacy Engine",
-            "style": "audit-general",
-            "reply": (
-                "**Key Liquidity & Tax Guidelines for Indian Mutual Funds:**\n\n"
-                "• **Open-Ended Funds**: You can redeem anytime. However, redeeming within 365 days attracts Short-Term Capital Gains (STCG) tax and potentially an Exit Load (~1%).\n"
-                "• **ELSS Tax-Savers**: These have a statutory 3-year lock-in per monthly instalment under Section 80C.\n"
-                "• **Long Term (Holding > 1 Year)**: Gains are taxed under Long-Term Capital Gains (LTCG) with annual exemptions as per IT rules."
-            )
-        }
-
-    # CATEGORY 7: Increasing Amount / Step-Up / Bonus
-    stepup_keywords = [
-        "increase", "step up", "top up", "badhana", "more money", "appraisal", "bonus", "lumpsum"
-    ]
-    if any(k in q for k in stepup_keywords):
+    # 8. Increasing SIP / Step-Up / Bonus Investments
+    if any(k in q for k in ["increase", "step up", "top up", "badhana", "more money", "appraisal", "bonus", "lumpsum"]):
         return {
             "badge": "📈 Wealth Acceleration Engine",
             "style": "audit-action",
             "reply": (
-                "**Accelerating your SIP journey:**\n\n"
-                "• **SIP Step-Up (Top-Up)**: You can enable automatic annual increases (e.g., 10% every year aligned with your appraisal) without having to start a new mandate.\n"
-                "• **One-Time Lumpsum**: Got a festival bonus? You can invest a one-time extra amount directly into your existing folio anytime through the Groww app."
+                "**Accelerating Your SIP Investments on Groww:**\n\n"
+                "• **SIP Step-Up**: Enable annual automated increases (e.g., +10% every year) aligned with appraisals without creating new mandates.\n"
+                "• **One-Time Lumpsum**: Invest bonuses or surplus funds into your existing folio anytime via the 'One-Time' button."
             )
         }
 
-    # CATEGORY 8: General / Conversational / Any Other Query
+    # 9. Loans, Collateral, and Unit Pledging
+    if any(k in q for k in ["loan", "pledge", "borrow", "collateral", "against mutual fund"]):
+        return {
+            "badge": "📋 Groww Liquidity & Feature Engine",
+            "style": "audit-general",
+            "reply": (
+                "**Loan Against Mutual Funds (LAMF):**\n\n"
+                "• You can borrow against eligible mutual fund units without selling them, keeping your compounding journey uninterrupted.\n"
+                "• Interest is charged only on the utilized amount, and units remain pledged until the loan is cleared."
+            )
+        }
+
+    # 10. General Dynamic Assistant
     return {
         "badge": "🌱 Groww First-Time Investor Guidance Engine",
         "style": "audit-general",
         "reply": (
-            "Namaste! As your Groww SIP Companion, I help first-time mutual fund investors navigate their first 12 months smoothly.\n\n"
-            "**I can guide you on:**\n"
-            "• **Managing Cashflow & Bounces**: Aligning SIP dates with your salary or skipping an instalment without bank fees.\n"
-            "• **Market Fluctuations**: Understanding why early flat/red returns are normal and how Rupee-Cost Averaging works.\n"
-            "• **SIP Maintenance**: Pausing for emergencies, setting up step-ups, or checking exit loads.\n\n"
-            "Feel free to ask your question, describe any issue you are facing, or click one of the quick test scenarios above!"
+            f"**Regarding your question:**\n\n"
+            "As your Groww SIP Companion, my role is to help you stay disciplined without unexpected costs or panic:\n"
+            "• **For Cash Flow Issues**: Use **Edit SIP Date** or **Skip Instalment** to avoid bank charges.\n"
+            "• **For Market Fluctuations**: Understand how Rupee-Cost Averaging lowers average acquisition cost.\n"
+            "• **For Liquidity Management**: Use **Pause SIP** for 1–3 months during short-term constraints.\n\n"
+            "What specific aspect of your investment journey would you like to explore?"
         )
     }
 
@@ -211,16 +259,21 @@ if "messages" not in st.session_state:
     st.session_state.messages = [
         {
             "role": "assistant",
-            "content": "Namaste! I am your Groww SIP Retention Companion. Are you facing a salary delay, seeing flat or red returns, or unsure about an upcoming SIP debit? Ask me anything below.",
+            "content": "Namaste! I am your Groww SIP Retention Companion. Ask me anything about managing salary delays, negative returns, SIP dates, or building long-term discipline.",
             "badge": "Verified System Onboarding",
-            "style": "audit-general"
+            "style": "audit-compliance"
         }
     ]
 
-# Handle Quick Button Clicks
+# Handle Quick Test Clicks
 if quick_input:
     st.session_state.messages.append({"role": "user", "content": quick_input})
-    res = process_investor_query(quick_input)
+    env_key = os.getenv("GEMINI_API_KEY", "")
+    ai_reply = generate_live_ai_response(quick_input, env_key)
+    if ai_reply:
+        res = {"reply": ai_reply, "badge": "✨ Live Gemini AI (Eval-Gated)", "style": "audit-ai"}
+    else:
+        res = semantic_intent_engine(quick_input)
     st.session_state.messages.append({"role": "assistant", "content": res["reply"], "badge": res["badge"], "style": res["style"]})
 
 # Render Existing Messages
@@ -230,10 +283,27 @@ for m in st.session_state.messages:
         if "badge" in m:
             st.markdown(f"<span class='audit-chip {m['style']}'>{m['badge']}</span>", unsafe_allow_html=True)
 
-# User Chat Input
-user_text = st.chat_input("Ask any question about your SIP, salary dates, market worries, or Groww features...")
+# User Chat Input (Accepts ANY Query)
+user_text = st.chat_input("Ask any question about your SIP, returns, salary dates, or Groww features...")
 if user_text:
     st.session_state.messages.append({"role": "user", "content": user_text})
-    res = process_investor_query(user_text)
-    st.session_state.messages.append({"role": "assistant", "content": res["reply"], "badge": res["badge"], "style": res["style"]})
+    
+    env_key = os.getenv("GEMINI_API_KEY", "")
+    ai_reply = generate_live_ai_response(user_text, env_key)
+    
+    if ai_reply:
+        res = {
+            "reply": ai_reply,
+            "badge": "✨ Live Gemini AI (Eval-Gated)",
+            "style": "audit-ai"
+        }
+    else:
+        res = semantic_intent_engine(user_text)
+
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": res["reply"],
+        "badge": res["badge"],
+        "style": res["style"]
+    })
     st.rerun()

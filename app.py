@@ -39,10 +39,10 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+# Strategic KPI Header Cards
 st.title("🌱 Groww 12-Month SIP Retention Companion")
 st.caption("AI-Native Growth MVP: Tackling First-Time Mutual Fund Churn (Months 3–6) without Fear or Recommendations.")
 
-# Top Strategic Context Cards
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("<div class='metric-box'><div class='metric-sub'>Target Metric</div><div class='metric-main'>12-Month Active SIP Continuation</div></div>", unsafe_allow_html=True)
@@ -67,30 +67,29 @@ if b3.button("🛡️ Recommend Best Small Cap"):
 if b4.button("⏸️ Emergency Cash Crunch"):
     quick_input = "I have sudden medical expenses this month and have no money left for my SIP."
 
-# Comprehensive System Prompt for Any User Query
 SYSTEM_PROMPT = """
 You are the AI Retention Companion on Groww, designed to support first-time Indian mutual fund retail investors during their critical first 12 months.
 
-MANDATORY GUARDRAILS:
-1. SEBI NON-ADVISORY: NEVER recommend specific mutual fund schemes, AMC names, stocks, or categories. If asked for recommendations ("which fund to buy", "best small cap"), decline politely, cite SEBI compliance, and explain risk profiling and time-horizon principles.
-2. ZERO FOMO / NO GUARANTEES: Never promise guaranteed returns, never say "double your money", and never create artificial urgency.
-3. RETENTION PLAYBOOK ON GROWW:
-   - For cashflow/salary issues: Teach users to use 'Skip Instalment' (avoids bank NACH bounce charges) or 'Edit SIP Date' (set 3-5 days after salary).
-   - For temporary crunches: Advise 'Pause SIP' (1-3 months) so existing units keep compounding.
-   - For reducing monthly commitments: Explain how to edit the monthly amount (e.g. ₹2,000 to ₹1,000) inside Groww.
-   - For early red returns: Educate on Rupee-Cost Averaging (RCA); explain that stopping during corrections locks in paper losses.
-   - For tax questions: Clarify that monthly SIP debits have NO tax; taxes (STCG/LTCG) apply only when units are redeemed.
-4. TONE: Calm, reassuring, educational, objective, and transparent.
+MANDATORY SEBI & PRODUCT GUARDRAILS:
+1. SEBI NON-ADVISORY: NEVER recommend specific mutual fund schemes, AMC names, stocks, or categories. If asked for recommendations ("which fund", "best small cap"), decline politely, state SEBI compliance, and explain asset allocation or time horizon principles.
+2. ZERO FOMO / NO GUARANTEES: Never promise guaranteed returns, never say "double your money", and never use fear or urgency ("hurry", "loss ho jayega").
+3. LEGAL & POLICE NOTICE CLARITY: Clarify that mutual funds are voluntary investments, NOT bank loans or EMIs. Missing a payment NEVER causes a police notice, legal action, or CIBIL default.
+4. RETENTION PLAYBOOK ON GROWW:
+   - For salary delays/bounces: Advise 'Skip Instalment' (prevents bank NACH bounce fees) or 'Edit SIP Date' (set 3-5 days after salary).
+   - For temporary job loss/cash crunch: Guide user to 'Pause SIP for 1-3 Months' so existing units stay invested.
+   - For allotment delays (money debited but units not showing): Explain T+1 to T+2 business day NAV allotment by the AMC.
+   - For red returns: Explain Rupee-Cost Averaging (RCA).
+5. TONE: Calm, reassuring, educational, objective, and transparent.
 """
 
 def generate_ai_response(prompt: str, key: str):
-    """Cleanly calls Gemini with AQ. key passed via x-goog-api-key header."""
+    """Dynamically queries candidate Gemini models with AQ key header."""
     if not key:
         return None, None, None
         
     cleaned_key = key.strip().replace('"', '').replace("'", "")
+    candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
     
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": cleaned_key
@@ -100,98 +99,152 @@ def generate_ai_response(prompt: str, key: str):
         "generationConfig": {"temperature": 0.25}
     }
     
-    try:
-        res = requests.post(url, headers=headers, json=payload, timeout=8)
-        if res.status_code == 200:
-            text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-            if any(w in prompt.lower() for w in ["best fund", "recommend", "which fund", "stock"]):
-                badge = "🛡️ SEBI Advisory Guardrail Applied"
-                style = "audit-compliance"
-            else:
-                badge = "✨ Live Gemini AI (Eval-Gated)"
-                style = "audit-ai"
-            return text, badge, style
-    except Exception:
-        pass
+    for model in candidate_models:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=6)
+            if res.status_code == 200:
+                text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+                if any(w in prompt.lower() for w in ["best fund", "recommend", "which fund", "stock"]):
+                    badge = "🛡️ SEBI Advisory Guardrail Applied"
+                    style = "audit-compliance"
+                else:
+                    badge = f"✨ Live Gemini AI ({model})"
+                    style = "audit-ai"
+                return text, badge, style
+        except Exception:
+            continue
+
     return None, None, None
 
 def universal_smart_fallback(query: str) -> dict:
-    """Smart fallback engine ensuring 100% meaningful coverage."""
+    """Comprehensive fallback classifying queries across all real-world retail investor friction points."""
     q = query.lower()
 
-    if any(k in q for k in ["best fund", "recommend", "which fund", "top fund", "small cap", "large cap", "stock", "crypto"]):
+    # 1. Legal Panic / Police Case / Notice / CIBIL / Job Loss Fear
+    if any(k in q for k in ["police", "case", "notice", "jail", "legal", "court", "cibil", "crime", "action aayega", "kanoon"]):
         return {
-            "badge": "🛡️ SEBI Advisory Guardrail (Zero-Advice)",
-            "style": "audit-compliance",
+            "badge": "🛡️ Legal & Compliance Assurance Engine",
+            "style": "audit-action",
             "reply": (
-                "**SEBI Compliance Notice:**\n"
-                "As an AI retention companion, I am strictly prohibited from recommending specific mutual fund schemes, AMCs, or stocks.\n\n"
-                "**How to make independent choices on Groww:**\n"
-                "• **Align with Horizon**: Use diversified equity/index funds for goals >5 years. For short horizons (<3 years), consider debt/liquid funds.\n"
-                "• **Screen Funds Objectively**: Compare 3Y/5Y Rolling Returns and Expense Ratios directly on Groww."
+                "**Bilkul nahi! Koi police case, legal notice ya FIR nahi hoti.**\n\n"
+                "Aapki tasalli ke liye yeh samajhna zaroori hai:\n"
+                "• **SIP Loan ya EMI nahi hai**: Mutual Fund aapka voluntary investment hai. Agar bank me paise nahi honge toh SIP bas us mahine fail hogi, yeh koi crime ya loan default nahi hai.\n"
+                "• **Bank Bounce Charges se bachein**: Agar bank mandate execute hoga aur balance nahi hoga, toh bank (SBI, HDFC etc.) ₹250–₹500 bounce charge kaat sakta hai.\n"
+                "• **Solution**: Groww app me jakar **'Pause SIP for 1-3 Months'** kar dijiye. Isse mandate pause ho jayega, zero penalty lagegi, aur purana paisa safe rahega!"
             )
         }
 
-    if any(k in q for k in ["amount", "reduce", "change", "decrease", "2000 to 1000", "kam"]):
+    # 2. Allotment Delay / Missing Units / Fraud Fears (T+1 / T+2 Days)
+    if any(k in q for k in ["fraud", "scam", "kat gaya", "portfolio 0", "not showing", "paisa doob", "kaha gaya", "gayab", "debited but"]):
+        return {
+            "badge": "⏱️ Transaction & Allotment Assurance",
+            "style": "audit-cashflow",
+            "reply": (
+                "**Aapka paisa 100% safe hai, bilkul pareshan na hon!**\n\n"
+                "Mutual Fund units allot hone ka ek standard process hota hai:\n"
+                "• **Paisa Katna (Day 0)**: Aapke bank se AutoPay debit hota hai.\n"
+                "• **Units Allotment (T+1 se T+2 Business Days)**: Fund house (AMC) us din ke NAV par units allot karta hai.\n"
+                "• Jaise hi AMC confirmation bhejta hai, Groww dashboard par units aur portfolio value reflect ho jati hai.\n\n"
+                "Aap **Profile > All Orders** me jakar real-time transaction status track kar sakte hain."
+            )
+        }
+
+    # 3. Changing / Reducing SIP Amount (₹2,000 to ₹1,000)
+    if any(k in q for k in ["change", "reduce", "decrease", "kam karna", "ghatana", "amount"]) and any(k in q for k in ["sip", "monthly", "2000", "1000", "500", "expenses"]):
         return {
             "badge": "⚡ Flexible SIP Adjustment Engine",
             "style": "audit-action",
             "reply": (
-                "**Yes, reducing your SIP amount is much better than stopping it completely:**\n\n"
-                "1. Go to **Groww > Mutual Funds > SIPs > Select SIP > Edit SIP**.\n"
-                "2. Tap **Edit Amount**, enter your new amount (e.g., ₹1,000, as long as it meets the scheme's minimum requirement), and confirm with OTP.\n"
-                "3. Alternatively, you can **Skip** this month's instalment without altering your future schedule."
+                "**Yes! Reducing your monthly amount is much smarter than stopping your SIP completely:**\n\n"
+                "• **How to Edit Amount on Groww**:\n"
+                "  1. Go to **Groww App > Mutual Funds > SIPs**.\n"
+                "  2. Select your active SIP and tap **'Edit SIP'**.\n"
+                "  3. Choose **'Edit Amount'**, change ₹2,000 to ₹1,000 (subject to the fund's minimum limit, usually ₹500 or ₹1,000), and confirm with OTP.\n\n"
+                "• **Alternative**: You can also **Skip** this month's instalment with 1 tap if expenses are unusually high this month."
             )
         }
 
-    if any(k in q for k in ["tax", "tds", "income tax", "capital gain"]):
+    # 4. Tax Inquiries on Monthly Debits
+    if any(k in q for k in ["tax", "tds", "income tax", "capital gain", "deduct tax"]):
         return {
             "badge": "📋 Taxation & Transparency Engine",
             "style": "audit-action",
             "reply": (
-                "**No tax is deducted when your monthly SIP executes:**\n\n"
-                "• Mutual fund investments are not taxed at the time of monthly debit.\n"
-                "• Tax applies only when you redeem (sell) your units and make a profit (Capital Gains).\n"
-                "• Equity held for >12 months is taxed under Long-Term Capital Gains (LTCG) with annual exemptions."
+                "**No, you do NOT pay income tax when your SIP is debited each month:**\n\n"
+                "• **Zero Tax on Monthly Investment**: Your monthly SIP buys units at that day's NAV without any TDS or deduction.\n"
+                "• **Tax Only on Redemption**: Tax applies only when you sell (redeem) your units, and only on the profit earned (Capital Gains).\n"
+                "• **Equity Rules**: Holding units over 12 months qualifies as Long-Term Capital Gains (LTCG)."
             )
         }
 
-    if any(k in q for k in ["salary", "delay", "late", "bounce", "date", "mandate", "nach", "fine", "penalty"]):
+    # 5. Redemption / Shaadi / Emergency Timeline
+    if any(k in q for k in ["shaadi", "wedding", "nikalna", "withdraw", "redeem", "kitne din", "bank me kab"]):
+        return {
+            "badge": "📋 Liquidity & Redemption Engine",
+            "style": "audit-action",
+            "reply": (
+                "**Paisa nikalna aur timeline:**\n\n"
+                "• **Kitne din me aayega**: Equity mutual funds ka redemption period **T+2 se T+3 working days** hota hai. Amount direct aapke verified bank account me transfer ho jayega.\n"
+                "• **Exit Load**: Agar investment ko 1 saal se kam hua hai, toh ~1% exit load lag sakta hai.\n"
+                "• **How to Redeem**: **Groww App > Dashboard > Select Fund > Redeem** par click karein."
+            )
+        }
+
+    # 6. SEBI Advisory Probes
+    if any(k in q for k in ["best fund", "recommend", "which fund", "top fund", "small cap", "large cap", "nifty", "stock"]):
+        return {
+            "badge": "🛡️ SEBI Advisory Guardrail (Zero Recommendation)",
+            "style": "audit-compliance",
+            "reply": (
+                "**SEBI Regulatory Compliance Notice:**\n"
+                "As an AI companion, I am strictly prohibited under SEBI guidelines from recommending specific mutual fund schemes, AMCs, or stocks.\n\n"
+                "**How to evaluate funds objectively on Groww:**\n"
+                "• Check 3Y/5Y Rolling Returns and Expense Ratios.\n"
+                "• Choose funds matching your investment horizon (e.g. >5 years for equity)."
+            )
+        }
+
+    # 7. Salary Delay / Cashflow / Mandate Bounce
+    if any(k in q for k in ["salary", "delay", "late", "bounce", "date", "mandate", "nach", "penalty", "fine"]):
         return {
             "badge": "⚡ Groww Cashflow & Mandate Action Engine",
             "style": "audit-cashflow",
             "reply": (
                 "**Avoid Mandate Bounces and Bank Penalties on Groww:**\n\n"
-                "1. **Edit SIP Date**: Set your debit date 3–5 days after your salary credit date to prevent recurring bounces.\n"
-                "2. **Skip Instalment**: If cash is tight this month, tap **'Skip Instalment'** at least 2 working days before the debit date. No bank bounce charges will apply."
+                "1. **Edit SIP Date**: Go to **Groww > Mutual Funds > SIPs > Select Fund > Edit SIP** and set your debit date 3–5 days after your salary credit.\n"
+                "2. **Skip Instalment**: If cash is tight this month, tap **'Skip Instalment'** at least 2 working days before the scheduled debit date to prevent bank NACH bounce charges."
             )
         }
 
-    if any(k in q for k in ["loss", "negative", "red", "returns", "down", "crash", "gir gaya"]):
+    # 8. Volatility & Red Returns Panic
+    if any(k in q for k in ["negative", "loss", "red", "returns", "down", "crash", "falling", "gir gaya"]):
         return {
             "badge": "🧠 Behavioral De-escalation & RCA Engine",
             "style": "audit-market",
             "reply": (
-                "**Seeing red or negative returns in Months 3–6 is normal:**\n\n"
-                "• **Rupee-Cost Averaging**: When NAVs drop, your fixed SIP buys **more fund units** at a discount.\n"
-                "• Early months represent unit accumulation. Stopping during corrections locks in paper losses and misses the eventual recovery cycle."
+                "**Seeing red or negative returns in early months is normal:**\n\n"
+                "• **Rupee-Cost Averaging**: When NAVs decline, your fixed SIP purchases **more fund units** at a discount.\n"
+                "• Early months represent the **accumulation phase**; compounding becomes visible after market recovery.\n"
+                "• Pausing or cancelling during a dip locks in paper losses and misses the subsequent recovery cycle."
             )
         }
 
+    # 9. Dynamic Safe Catch-All
     return {
         "badge": "🌱 Groww Retention Guidance Engine",
         "style": "audit-action",
         "reply": (
-            f"**Regarding your query:**\n\n"
-            "As your Groww SIP Companion, I help you maintain long-term financial discipline without unexpected costs:\n"
-            "• **Managing Debits**: You can edit instalment amounts, shift debit dates, or skip debits to avoid bank bounce fees.\n"
-            "• **Market Perspective**: Short-term volatility benefits recurring SIPs by lowering average unit cost over time.\n"
-            "• **Flexibility**: Use 'Pause SIP' (1–3 months) during emergencies to keep accumulated units invested.\n\n"
-            "Would you like guidance on editing your SIP settings or managing your upcoming instalment?"
+            f"**Regarding your question:**\n\n"
+            "As your Groww SIP Companion, I help first-time investors navigate their journey without stress:\n"
+            "• **No Legal Issues**: SIPs are voluntary investments. Missing a payment never causes legal action.\n"
+            "• **Managing Cashflow**: Use 'Pause SIP' (1-3 months) or 'Skip Instalment' to avoid bank penalties.\n"
+            "• **Market Perspective**: Down markets help you accumulate more units via Rupee-Cost Averaging.\n\n"
+            "How can I help you adjust your SIP settings today?"
         )
     }
 
-# Session History
+# Session State Initialization
 if "messages" not in st.session_state:
     st.session_state.messages = [
         {
@@ -202,7 +255,7 @@ if "messages" not in st.session_state:
         }
     ]
 
-# Handle Quick Test Buttons
+# Handle Quick Test Prompts
 if quick_input:
     st.session_state.messages.append({"role": "user", "content": quick_input})
     env_key = os.getenv("GEMINI_API_KEY", "")
@@ -218,7 +271,7 @@ if quick_input:
         "style": reply_dict["style"]
     })
 
-# Render Chat
+# Render Conversation
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])

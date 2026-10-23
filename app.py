@@ -39,10 +39,11 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Strategic KPI Header Cards
+# Strategic Header
 st.title("🌱 Groww 12-Month SIP Retention Companion")
 st.caption("AI-Native Growth MVP: Tackling First-Time Mutual Fund Churn (Months 3–6) without Fear or Recommendations.")
 
+# Top Strategic Context Cards
 c1, c2, c3 = st.columns(3)
 with c1:
     st.markdown("<div class='metric-box'><div class='metric-sub'>Target Metric</div><div class='metric-main'>12-Month Active SIP Continuation</div></div>", unsafe_allow_html=True)
@@ -77,19 +78,45 @@ MANDATORY SEBI & PRODUCT GUARDRAILS:
 4. RETENTION PLAYBOOK ON GROWW:
    - For salary delays/bounces: Advise 'Skip Instalment' (prevents bank NACH bounce fees) or 'Edit SIP Date' (set 3-5 days after salary).
    - For temporary job loss/cash crunch: Guide user to 'Pause SIP for 1-3 Months' so existing units stay invested.
+   - For bonus/lumpsum: Advise adding a One-Time investment into the same folio without creating duplicate SIPs.
    - For allotment delays (money debited but units not showing): Explain T+1 to T+2 business day NAV allotment by the AMC.
    - For red returns: Explain Rupee-Cost Averaging (RCA).
 5. TONE: Calm, reassuring, educational, objective, and transparent.
 """
 
+@st.cache_data(ttl=3600)
+def discover_active_model(cleaned_key: str):
+    """Dynamically queries Google AI Studio to discover which models are active for this key."""
+    if not cleaned_key:
+        return None
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    headers = {"x-goog-api-key": cleaned_key}
+    try:
+        res = requests.get(url, headers=headers, timeout=5)
+        if res.status_code == 200:
+            models_data = res.json().get("models", [])
+            # Priority preference: flash models
+            for pref in ["models/gemini-2.0-flash", "models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-2.5-flash"]:
+                for m in models_data:
+                    if m.get("name") == pref and "generateContent" in m.get("supportedGenerationMethods", []):
+                        return pref
+            # Fallback to any model supporting generateContent
+            for m in models_data:
+                if "generateContent" in m.get("supportedGenerationMethods", []):
+                    return m.get("name")
+    except Exception:
+        pass
+    return "models/gemini-1.5-flash"
+
 def generate_ai_response(prompt: str, key: str):
-    """Dynamically queries candidate Gemini models with AQ key header."""
+    """Executes live AI call using dynamically resolved active endpoint."""
     if not key:
         return None, None, None
         
     cleaned_key = key.strip().replace('"', '').replace("'", "")
-    candidate_models = ["gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b"]
+    model_name = discover_active_model(cleaned_key) or "models/gemini-1.5-flash"
     
+    url = f"https://generativelanguage.googleapis.com/v1beta/{model_name}:generateContent"
     headers = {
         "Content-Type": "application/json",
         "x-goog-api-key": cleaned_key
@@ -99,73 +126,97 @@ def generate_ai_response(prompt: str, key: str):
         "generationConfig": {"temperature": 0.25}
     }
     
-    for model in candidate_models:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            res = requests.post(url, headers=headers, json=payload, timeout=6)
-            if res.status_code == 200:
-                text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
-                if any(w in prompt.lower() for w in ["best fund", "recommend", "which fund", "stock"]):
-                    badge = "🛡️ SEBI Advisory Guardrail Applied"
-                    style = "audit-compliance"
-                else:
-                    badge = f"✨ Live Gemini AI ({model})"
-                    style = "audit-ai"
-                return text, badge, style
-        except Exception:
-            continue
-
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=6)
+        if res.status_code == 200:
+            text = res.json()["candidates"][0]["content"]["parts"][0]["text"]
+            if any(w in prompt.lower() for w in ["best fund", "recommend", "which fund", "stock"]):
+                badge = "🛡️ SEBI Advisory Guardrail Applied"
+                style = "audit-compliance"
+            else:
+                badge = f"✨ Live Gemini AI ({model_name.replace('models/', '')})"
+                style = "audit-ai"
+            return text, badge, style
+    except Exception:
+        pass
     return None, None, None
 
 def universal_smart_fallback(query: str) -> dict:
     """Comprehensive fallback classifying queries across all real-world retail investor friction points."""
     q = query.lower()
 
-    # 1. Legal Panic / Police Case / Notice / CIBIL / Job Loss Fear
-    if any(k in q for k in ["police", "case", "notice", "jail", "legal", "court", "cibil", "crime", "action aayega", "kanoon"]):
+    # 1. Bonus / Extra Money / Lumpsum into Existing SIP (English & Hinglish)
+    if any(k in q for k in ["bonus", "extra", "10,000", "10000", "5000", "lumpsum", "one-time", "purani sip", "daal sakta", "nayi shuru", "add money", "holi", "diwali"]):
+        return {
+            "badge": "📈 Wealth Acceleration & Folio Management",
+            "style": "audit-action",
+            "reply": (
+                "**Aapko nayi SIP shuru karne ki bilkul zaroorat nahi hai!**\n\n"
+                "Aap apne bonus ya extra paise ko usi purani SIP/folio me aasaani se add kar sakte hain:\n\n"
+                "• **One-Time Lumpsum Option**: Groww dashboard par apne us fund par click karein aur **'One-Time' (Lumpsum)** select karein. Wahan apna amount daalkar payment kar dein.\n"
+                "• **Same Folio Me Judega**: Yeh amount aapke purane units ke sath hi add ho jayega aur aapka monthly SIP mandate (AutoPay) pehle ki tarah chalta rahega.\n"
+                "• **Clean Portfolio**: Ek hi fund me multiple SIPs banane se portfolio track karna mushkil hota hai, isliye One-Time investment karna best practice hai."
+            )
+        }
+
+    # 2. SEBI Advisory Probes (Zero Recommendation Guardrail)
+    if any(k in q for k in ["best fund", "recommend", "which fund", "top fund", "small cap", "large cap", "nifty", "stock", "crypto", "kisme invest", "kaha lagau"]):
+        return {
+            "badge": "🛡️ SEBI Advisory Guardrail (Zero Recommendation)",
+            "style": "audit-compliance",
+            "reply": (
+                "**SEBI Regulatory Compliance Notice:**\n"
+                "As an AI companion on Groww, I am strictly prohibited under SEBI guidelines from recommending specific mutual fund schemes, AMCs, or stocks.\n\n"
+                "**How to evaluate funds objectively on Groww:**\n"
+                "• **Rolling Returns (3Y & 5Y)**: Look for consistency across market ups and downs rather than last year's top performer.\n"
+                "• **Expense Ratio & Tracking Error**: Lower expense ratios protect your compounding over long horizons.\n"
+                "• **Horizon Matching**: Choose funds that match your goal duration (>5 years for equity)."
+            )
+        }
+
+    # 3. Legal Panic / Police Case / Notice / CIBIL / Job Loss Fear
+    if any(k in q for k in ["police", "case", "notice", "jail", "legal", "court", "cibil", "crime", "action aayega", "kanoon", "job chhod"]):
         return {
             "badge": "🛡️ Legal & Compliance Assurance Engine",
             "style": "audit-action",
             "reply": (
                 "**Bilkul nahi! Koi police case, legal notice ya FIR nahi hoti.**\n\n"
-                "Aapki tasalli ke liye yeh samajhna zaroori hai:\n"
-                "• **SIP Loan ya EMI nahi hai**: Mutual Fund aapka voluntary investment hai. Agar bank me paise nahi honge toh SIP bas us mahine fail hogi, yeh koi crime ya loan default nahi hai.\n"
-                "• **Bank Bounce Charges se bachein**: Agar bank mandate execute hoga aur balance nahi hoga, toh bank (SBI, HDFC etc.) ₹250–₹500 bounce charge kaat sakta hai.\n"
-                "• **Solution**: Groww app me jakar **'Pause SIP for 1-3 Months'** kar dijiye. Isse mandate pause ho jayega, zero penalty lagegi, aur purana paisa safe rahega!"
+                "• **SIP Loan ya EMI nahi hai**: Mutual Fund aapka voluntary investment hai. Agar bank me paise nahi honge toh SIP bas us mahine execute nahi hogi. Yeh koi loan default ya apradh nahi hai.\n"
+                "• **Bank Bounce Charge se bachein**: Agar bank mandate try karega aur account balance nahi hoga, toh aapka bank ₹250–₹500 mandate bounce penalty kaat sakta hai.\n"
+                "• **Action Plan**: Groww app me jakar **'Pause SIP for 1-3 Months'** kar dijiye. Isse mandate pause ho jayega, zero bank charge lagega, aur purana paisa safe rahega!"
             )
         }
 
-    # 2. Allotment Delay / Missing Units / Fraud Fears (T+1 / T+2 Days)
-    if any(k in q for k in ["fraud", "scam", "kat gaya", "portfolio 0", "not showing", "paisa doob", "kaha gaya", "gayab", "debited but"]):
+    # 4. Allotment Delay / Missing Units / Fraud Fears (T+1 / T+2 Days)
+    if any(k in q for k in ["fraud", "scam", "kat gaya", "portfolio 0", "not showing", "paisa doob", "kaha gaya", "gayab", "debited but", "units not"]):
         return {
             "badge": "⏱️ Transaction & Allotment Assurance",
             "style": "audit-cashflow",
             "reply": (
                 "**Aapka paisa 100% safe hai, bilkul pareshan na hon!**\n\n"
-                "Mutual Fund units allot hone ka ek standard process hota hai:\n"
-                "• **Paisa Katna (Day 0)**: Aapke bank se AutoPay debit hota hai.\n"
-                "• **Units Allotment (T+1 se T+2 Business Days)**: Fund house (AMC) us din ke NAV par units allot karta hai.\n"
+                "Mutual Fund units allot hone ka ek standard cycle hota hai:\n"
+                "• **Day 0**: Aapke bank se AutoPay debit hota hai.\n"
+                "• **T+1 se T+2 Working Days**: AMC us din ke NAV par units allot karta hai.\n"
                 "• Jaise hi AMC confirmation bhejta hai, Groww dashboard par units aur portfolio value reflect ho jati hai.\n\n"
-                "Aap **Profile > All Orders** me jakar real-time transaction status track kar sakte hain."
+                "Aap **Profile > All Orders** me jakar real-time order status dekh sakte hain."
             )
         }
 
-    # 3. Changing / Reducing SIP Amount (₹2,000 to ₹1,000)
+    # 5. Changing / Reducing SIP Amount (₹2,000 to ₹1,000)
     if any(k in q for k in ["change", "reduce", "decrease", "kam karna", "ghatana", "amount"]) and any(k in q for k in ["sip", "monthly", "2000", "1000", "500", "expenses"]):
         return {
             "badge": "⚡ Flexible SIP Adjustment Engine",
             "style": "audit-action",
             "reply": (
                 "**Yes! Reducing your monthly amount is much smarter than stopping your SIP completely:**\n\n"
-                "• **How to Edit Amount on Groww**:\n"
-                "  1. Go to **Groww App > Mutual Funds > SIPs**.\n"
-                "  2. Select your active SIP and tap **'Edit SIP'**.\n"
-                "  3. Choose **'Edit Amount'**, change ₹2,000 to ₹1,000 (subject to the fund's minimum limit, usually ₹500 or ₹1,000), and confirm with OTP.\n\n"
-                "• **Alternative**: You can also **Skip** this month's instalment with 1 tap if expenses are unusually high this month."
+                "1. Go to **Groww App > Mutual Funds > SIPs**.\n"
+                "2. Select your active SIP and tap **'Edit SIP'**.\n"
+                "3. Choose **'Edit Amount'**, change ₹2,000 to ₹1,000 (subject to the fund's minimum requirement, usually ₹500 or ₹1,000), and confirm with OTP.\n\n"
+                "• If expenses are tight for only this month, you can also tap **'Skip Instalment'** with 1 tap."
             )
         }
 
-    # 4. Tax Inquiries on Monthly Debits
+    # 6. Tax Inquiries on Monthly Debits
     if any(k in q for k in ["tax", "tds", "income tax", "capital gain", "deduct tax"]):
         return {
             "badge": "📋 Taxation & Transparency Engine",
@@ -174,72 +225,58 @@ def universal_smart_fallback(query: str) -> dict:
                 "**No, you do NOT pay income tax when your SIP is debited each month:**\n\n"
                 "• **Zero Tax on Monthly Investment**: Your monthly SIP buys units at that day's NAV without any TDS or deduction.\n"
                 "• **Tax Only on Redemption**: Tax applies only when you sell (redeem) your units, and only on the profit earned (Capital Gains).\n"
-                "• **Equity Rules**: Holding units over 12 months qualifies as Long-Term Capital Gains (LTCG)."
+                "• **Equity Timeline**: Holding units over 12 months qualifies as Long-Term Capital Gains (LTCG)."
             )
         }
 
-    # 5. Redemption / Shaadi / Emergency Timeline
+    # 7. Redemption / Shaadi / Emergency Timeline
     if any(k in q for k in ["shaadi", "wedding", "nikalna", "withdraw", "redeem", "kitne din", "bank me kab"]):
         return {
             "badge": "📋 Liquidity & Redemption Engine",
             "style": "audit-action",
             "reply": (
                 "**Paisa nikalna aur timeline:**\n\n"
-                "• **Kitne din me aayega**: Equity mutual funds ka redemption period **T+2 se T+3 working days** hota hai. Amount direct aapke verified bank account me transfer ho jayega.\n"
-                "• **Exit Load**: Agar investment ko 1 saal se kam hua hai, toh ~1% exit load lag sakta hai.\n"
+                "• **Kitne din me aayega**: Equity mutual funds ka redemption period **T+2 se T+3 working days** hota hai. Amount direct aapke verified bank account me credit ho jayega.\n"
+                "• **Exit Load Check**: Agar investment ko 1 saal se kam hua hai, toh ~1% exit load lag sakta hai.\n"
                 "• **How to Redeem**: **Groww App > Dashboard > Select Fund > Redeem** par click karein."
             )
         }
 
-    # 6. SEBI Advisory Probes
-    if any(k in q for k in ["best fund", "recommend", "which fund", "top fund", "small cap", "large cap", "nifty", "stock"]):
-        return {
-            "badge": "🛡️ SEBI Advisory Guardrail (Zero Recommendation)",
-            "style": "audit-compliance",
-            "reply": (
-                "**SEBI Regulatory Compliance Notice:**\n"
-                "As an AI companion, I am strictly prohibited under SEBI guidelines from recommending specific mutual fund schemes, AMCs, or stocks.\n\n"
-                "**How to evaluate funds objectively on Groww:**\n"
-                "• Check 3Y/5Y Rolling Returns and Expense Ratios.\n"
-                "• Choose funds matching your investment horizon (e.g. >5 years for equity)."
-            )
-        }
-
-    # 7. Salary Delay / Cashflow / Mandate Bounce
+    # 8. Salary Delay / Cashflow / Mandate Bounce
     if any(k in q for k in ["salary", "delay", "late", "bounce", "date", "mandate", "nach", "penalty", "fine"]):
         return {
             "badge": "⚡ Groww Cashflow & Mandate Action Engine",
             "style": "audit-cashflow",
             "reply": (
                 "**Avoid Mandate Bounces and Bank Penalties on Groww:**\n\n"
-                "1. **Edit SIP Date**: Go to **Groww > Mutual Funds > SIPs > Select Fund > Edit SIP** and set your debit date 3–5 days after your salary credit.\n"
+                "1. **Edit SIP Date**: Set your debit date 3–5 days after your salary credit to prevent recurring bounces.\n"
                 "2. **Skip Instalment**: If cash is tight this month, tap **'Skip Instalment'** at least 2 working days before the scheduled debit date to prevent bank NACH bounce charges."
             )
         }
 
-    # 8. Volatility & Red Returns Panic
+    # 9. Volatility & Red Returns Panic (Months 3 to 6)
     if any(k in q for k in ["negative", "loss", "red", "returns", "down", "crash", "falling", "gir gaya"]):
         return {
             "badge": "🧠 Behavioral De-escalation & RCA Engine",
             "style": "audit-market",
             "reply": (
                 "**Seeing red or negative returns in early months is normal:**\n\n"
-                "• **Rupee-Cost Averaging**: When NAVs decline, your fixed SIP purchases **more fund units** at a discount.\n"
+                "• **Rupee-Cost Averaging**: When NAVs drop, your fixed SIP buys **more fund units** at a discount.\n"
                 "• Early months represent the **accumulation phase**; compounding becomes visible after market recovery.\n"
-                "• Pausing or cancelling during a dip locks in paper losses and misses the subsequent recovery cycle."
+                "• Stopping during a dip locks in paper losses and misses the recovery rally."
             )
         }
 
-    # 9. Dynamic Safe Catch-All
+    # 10. Intelligent Universal Catch-All
     return {
         "badge": "🌱 Groww Retention Guidance Engine",
         "style": "audit-action",
         "reply": (
             f"**Regarding your question:**\n\n"
             "As your Groww SIP Companion, I help first-time investors navigate their journey without stress:\n"
-            "• **No Legal Issues**: SIPs are voluntary investments. Missing a payment never causes legal action.\n"
-            "• **Managing Cashflow**: Use 'Pause SIP' (1-3 months) or 'Skip Instalment' to avoid bank penalties.\n"
-            "• **Market Perspective**: Down markets help you accumulate more units via Rupee-Cost Averaging.\n\n"
+            "• **Managing Cashflow**: You can edit instalment amounts, shift debit dates, or skip debits to avoid bank bounce fees.\n"
+            "• **Market Perspective**: Short-term volatility benefits recurring SIPs by lowering average unit cost over time via Rupee-Cost Averaging.\n"
+            "• **Flexibility**: Use 'Pause SIP' (1–3 months) during emergencies to keep accumulated units invested.\n\n"
             "How can I help you adjust your SIP settings today?"
         )
     }
@@ -271,7 +308,7 @@ if quick_input:
         "style": reply_dict["style"]
     })
 
-# Render Conversation
+# Render Conversation History
 for m in st.session_state.messages:
     with st.chat_message(m["role"]):
         st.markdown(m["content"])
